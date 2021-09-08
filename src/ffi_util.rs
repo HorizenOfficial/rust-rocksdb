@@ -43,6 +43,17 @@ pub fn error_message(ptr: *const c_char) -> String {
     }
 }
 
+pub fn to_cstring<S, E>(string: S, error_message: E) -> Result<CString, Error>
+    where
+        S: AsRef<str>,
+        E: AsRef<str>,
+{
+    match CString::new(string.as_ref().as_bytes()) {
+        Ok(c) => Ok(c),
+        Err(_) => Err(Error::new(error_message.as_ref().to_string())),
+    }
+}
+
 pub fn opt_bytes_to_ptr<T: AsRef<[u8]>>(opt: Option<T>) -> *const c_char {
     match opt {
         Some(v) => v.as_ref().as_ptr() as *const c_char,

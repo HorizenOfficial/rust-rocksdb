@@ -15,6 +15,7 @@
 use crate::{db::MultiThreaded, ffi, Options};
 
 use std::sync::Arc;
+use crate::handle::Handle;
 
 /// The name of the default column family.
 ///
@@ -46,7 +47,13 @@ impl ColumnFamilyDescriptor {
 /// An opaque type used to represent a column family. Returned from some functions, and used
 /// in others
 pub struct ColumnFamily {
-    pub(crate) inner: *mut ffi::rocksdb_column_family_handle_t,
+    pub(crate) inner: *mut ffi::rocksdb_column_family_handle_t
+}
+
+impl ColumnFamily {
+    pub(crate) fn new(handle: *mut ffi::rocksdb_column_family_handle_t) -> ColumnFamily {
+        ColumnFamily { inner: handle }
+    }
 }
 
 /// A specialized opaque type used to represent a column family by the [`MultiThreaded`]
@@ -142,3 +149,9 @@ impl<'a> AsColumnFamilyRef for Arc<BoundColumnFamily<'a>> {
 
 unsafe impl Send for ColumnFamily {}
 unsafe impl<'a> Send for BoundColumnFamily<'a> {}
+
+impl Handle<ffi::rocksdb_column_family_handle_t> for ColumnFamily {
+    fn handle(&self) -> *mut ffi::rocksdb_column_family_handle_t {
+        self.inner
+    }
+}

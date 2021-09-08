@@ -75,6 +75,8 @@
     clippy::upper_case_acronyms,
 )]
 
+extern crate librocksdb_sys as ffi;
+
 #[macro_use]
 mod ffi_util;
 
@@ -88,12 +90,25 @@ mod db;
 mod db_iterator;
 mod db_options;
 mod db_pinnable_slice;
+mod db_vector;
 pub mod merge_operator;
 pub mod perf;
 mod slice_transform;
 mod snapshot;
 mod sst_file_writer;
 mod write_batch;
+// Transactions-related modules
+pub mod ops;
+mod handle;
+mod open_raw;
+mod transaction;
+mod transaction_db;
+
+mod util;
+pub use util::TemporaryDBPath;
+
+pub use transaction::Transaction;
+pub use transaction_db::{TransactionDB, TransactionDBOptions, TransactionOptions};
 
 pub use crate::{
     column_family::{
@@ -113,6 +128,7 @@ pub use crate::{
         MemtableFactory, Options, PlainTableFactoryOptions, ReadOptions, UniversalCompactOptions,
         UniversalCompactionStopStyle, WriteOptions,
     },
+    db_vector::{DBVector},
     db_pinnable_slice::DBPinnableSlice,
     merge_operator::MergeOperands,
     perf::{PerfContext, PerfMetric, PerfStatsLevel},
@@ -121,8 +137,6 @@ pub use crate::{
     sst_file_writer::SstFileWriter,
     write_batch::{WriteBatch, WriteBatchIterator},
 };
-
-use librocksdb_sys as ffi;
 
 use std::error;
 use std::fmt;

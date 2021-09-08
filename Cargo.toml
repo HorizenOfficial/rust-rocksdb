@@ -37,3 +37,10 @@ tempfile = "3.1"
 pretty_assertions = "0.7"
 bincode = "1.3"
 serde = { version = "1", features = [ "derive" ] }
+
+[profile.test]
+opt-level = 0
+lto = "thin"
+incremental = true
+debug-assertions = true
+debug = true

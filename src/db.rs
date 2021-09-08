@@ -86,7 +86,7 @@ impl ThreadMode for SingleThreaded {
         Self {
             cfs: cfs
                 .into_iter()
-                .map(|(n, c)| (n, ColumnFamily { inner: c }))
+                .map(|(n, c)| (n, ColumnFamily::new(c)))
                 .collect(),
         }
     }
@@ -1774,7 +1774,7 @@ impl DBWithThreadMode<SingleThreaded> {
         let inner = self.create_inner_cf_handle(name.as_ref(), opts)?;
         self.cfs
             .cfs
-            .insert(name.as_ref().to_string(), ColumnFamily { inner });
+            .insert(name.as_ref().to_string(), ColumnFamily::new(inner));
         Ok(())
     }
 

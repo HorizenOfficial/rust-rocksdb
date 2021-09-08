@@ -15,6 +15,7 @@
 use crate::{ffi, AsColumnFamilyRef};
 use libc::{c_char, c_void, size_t};
 use std::slice;
+use crate::handle::Handle;
 
 /// An atomic batch of write operations.
 ///
@@ -279,6 +280,12 @@ impl Drop for WriteBatch {
         unsafe {
             ffi::rocksdb_writebatch_destroy(self.inner);
         }
+    }
+}
+
+impl Handle<ffi::rocksdb_writebatch_t> for WriteBatch {
+    fn handle(&self) -> *mut ffi::rocksdb_writebatch_t {
+        self.inner
     }
 }
 

@@ -81,6 +81,14 @@ pub struct DBRawIteratorWithThreadMode<'a, D: DBAccess> {
 }
 
 impl<'a, D: DBAccess> DBRawIteratorWithThreadMode<'a, D> {
+    pub(crate) fn new_raw(iter_raw: *mut ffi::rocksdb_iterator_t, readopts: ReadOptions) -> Self {
+        Self {
+            inner: iter_raw,
+            _readopts: readopts,
+            db: PhantomData,
+        }
+    }
+
     pub(crate) fn new(db: &D, readopts: ReadOptions) -> Self {
         unsafe {
             Self {
@@ -392,6 +400,16 @@ pub enum IteratorMode<'a> {
 }
 
 impl<'a, D: DBAccess> DBIteratorWithThreadMode<'a, D> {
+    pub(crate) fn new_raw(raw_iter: DBRawIteratorWithThreadMode<'a, D>, mode: IteratorMode) -> Self {
+        let mut rv = DBIteratorWithThreadMode {
+            raw: raw_iter,
+            direction: Direction::Forward, // blown away by set_mode()
+            just_seeked: false,
+        };
+        rv.set_mode(mode);
+        rv
+    }
+
     pub(crate) fn new(db: &D, readopts: ReadOptions, mode: IteratorMode) -> Self {
         let mut rv = DBIteratorWithThreadMode {
             raw: DBRawIteratorWithThreadMode::new(db, readopts),
