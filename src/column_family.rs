@@ -15,7 +15,7 @@
 use crate::{db::MultiThreaded, ffi, Options};
 
 use std::sync::Arc;
-use crate::handle::Handle;
+use crate::transactions::handle::Handle;
 
 /// The name of the default column family.
 ///

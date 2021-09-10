@@ -90,25 +90,18 @@ mod db;
 mod db_iterator;
 mod db_options;
 mod db_pinnable_slice;
-mod db_vector;
 pub mod merge_operator;
 pub mod perf;
 mod slice_transform;
 mod snapshot;
 mod sst_file_writer;
 mod write_batch;
-// Transactions-related modules
-pub mod ops;
-mod handle;
-mod open_raw;
-mod transaction;
-mod transaction_db;
+pub mod transactions;
 
-mod util;
-pub use util::TemporaryDBPath;
+pub use transactions::util::TemporaryDBPath;
 
-pub use transaction::Transaction;
-pub use transaction_db::{TransactionDB, TransactionDBOptions, TransactionOptions};
+pub use transactions::transaction::Transaction;
+pub use transactions::transaction_db::{TransactionDB, TransactionDBOptions, TransactionOptions};
 
 pub use crate::{
     column_family::{
@@ -128,7 +121,7 @@ pub use crate::{
         MemtableFactory, Options, PlainTableFactoryOptions, ReadOptions, UniversalCompactOptions,
         UniversalCompactionStopStyle, WriteOptions,
     },
-    db_vector::{DBVector},
+    transactions::db_vector::DBVector,
     db_pinnable_slice::DBPinnableSlice,
     merge_operator::MergeOperands,
     perf::{PerfContext, PerfMetric, PerfStatsLevel},

@@ -1,10 +1,10 @@
 use ffi;
 
-use crate::{ffi_util::to_cstring, handle::Handle, ColumnFamily, Error, Options};
+use crate::{ffi_util::to_cstring, transactions::handle::Handle, ColumnFamily, Error, Options};
 
 use std::collections::BTreeMap;
 
-pub trait GetColumnFamilys {
+pub trait GetColumnFamilies {
     fn get_cfs(&self) -> &BTreeMap<String, ColumnFamily>;
 
     fn get_mut_cfs(&mut self) -> &mut BTreeMap<String, ColumnFamily>;
@@ -25,7 +25,7 @@ pub trait DropCf {
 
 impl<T> CreateCf for T
 where
-    T: Handle<ffi::rocksdb_t> + super::Write + GetColumnFamilys,
+    T: Handle<ffi::rocksdb_t> + super::Write + GetColumnFamilies,
 {
     fn create_cf<N: AsRef<str>>(&mut self, name: N, opts: &Options) -> Result<(), Error> {
         let cname = to_cstring(
@@ -48,7 +48,7 @@ where
 
 impl<T> DropCf for T
 where
-    T: Handle<ffi::rocksdb_t> + super::Write + GetColumnFamilys,
+    T: Handle<ffi::rocksdb_t> + super::Write + GetColumnFamilies,
 {
     fn drop_cf(&mut self, name: &str) -> Result<(), Error> {
         let cf = self

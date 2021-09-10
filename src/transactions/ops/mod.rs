@@ -23,15 +23,10 @@ mod merge;
 mod put;
 mod iter;
 //----------------------
-// mod get_pinned;
 mod writebatch;
 mod open;
 mod columnfamily;
 mod checkpoint;
-// mod compact;
-// mod flush;
-// mod property;
-// mod setoptions;
 mod transaction;
 
 /// Marker trait for operations that leave DB
@@ -47,15 +42,9 @@ pub use self::get::{Get, GetCF};
 pub use self::merge::{Merge, MergeCF};
 pub use self::put::{Put, PutCF};
 pub use self::iter::{Iterate, IterateCF};
-// pub use self::get_pinned::{GetPinned, GetPinnedCF};
 pub use self::writebatch::WriteOps;
 pub use self::open::{Open, OpenCF};
 pub use self::columnfamily::CreateCf;
-// pub use self::columnfamily::DropCf;
-pub use self::columnfamily::GetColumnFamilys;
-// pub use self::compact::{CompactRange, CompactRangeCF};
-// pub use self::flush::Flush;
-// pub use self::property::{GetProperty, GetPropertyCF};
-// pub use self::setoptions::SetOptions;
+pub use self::columnfamily::GetColumnFamilies;
 pub use self::transaction::TransactionBegin;
 pub use self::checkpoint::CreateCheckpointObject;

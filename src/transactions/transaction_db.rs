@@ -1,9 +1,5 @@
 use crate::{
-    db_vector::DBVector,
     ffi_util::to_cstring,
-    handle::{ConstHandle, Handle},
-    open_raw::{OpenRaw, OpenRawFFI},
-    ops::*,
     write_batch::WriteBatch,
     ColumnFamily, DBRawIterator, Error, Options, ReadOptions, WriteOptions
 };
@@ -14,7 +10,14 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::ptr;
-use crate::transaction::Transaction;
+
+use crate::transactions::{
+    transaction::Transaction,
+    db_vector::DBVector,
+    handle::{Handle, ConstHandle},
+    ops::*,
+    open_raw::{OpenRaw, OpenRawFFI}
+};
 
 /// A transaction database.
 pub struct TransactionDB {
@@ -86,7 +89,7 @@ impl OpenRaw for TransactionDB {
     }
 }
 
-impl GetColumnFamilys for TransactionDB {
+impl GetColumnFamilies for TransactionDB {
     fn get_cfs(&self) -> &BTreeMap<String, ColumnFamily> {
         &self.cfs
     }
@@ -111,9 +114,9 @@ impl TransactionBegin for TransactionDB {
     ) -> Transaction<TransactionDB> {
         unsafe {
             let inner = ffi::rocksdb_transaction_begin(
-                self.inner,
+                self.handle(),
                 write_options.handle(),
-                tx_options.inner,
+                tx_options.handle(),
                 ptr::null_mut(),
             );
             Transaction::new(inner)
@@ -261,6 +264,12 @@ impl TransactionOptions {
         unsafe {
             ffi::rocksdb_transaction_options_set_set_snapshot(self.inner, set_snapshot as c_uchar);
         }
+    }
+}
+
+impl Handle<ffi::rocksdb_transaction_options_t> for TransactionOptions {
+    fn handle(&self) -> *mut ffi::rocksdb_transaction_options_t {
+        self.inner
     }
 }
 

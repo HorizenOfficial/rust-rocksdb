@@ -16,7 +16,13 @@
 use ffi;
 use libc::{c_char, size_t};
 
-use crate::{handle::Handle, ColumnFamily, DBVector, Error, ReadOptions};
+use crate::{
+    transactions::{
+        handle::Handle,
+        db_vector::DBVector
+    },
+    ColumnFamily, Error, ReadOptions
+};
 
 pub trait Get<R> {
     fn get_full<K: AsRef<[u8]>>(

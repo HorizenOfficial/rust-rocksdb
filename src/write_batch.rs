@@ -15,7 +15,7 @@
 use crate::{ffi, AsColumnFamilyRef};
 use libc::{c_char, c_void, size_t};
 use std::slice;
-use crate::handle::Handle;
+use crate::transactions::handle::Handle;
 
 /// An atomic batch of write operations.
 ///

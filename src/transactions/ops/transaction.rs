@@ -1,4 +1,4 @@
-use crate::transaction::Transaction;
+use crate::transactions::transaction::Transaction;
 
 pub trait TransactionBegin: Sized {
     type WriteOptions: Default;

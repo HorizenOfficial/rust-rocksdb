@@ -16,100 +16,125 @@
 use ffi;
 use libc::{c_char, size_t};
 
-use crate::{handle::Handle, ColumnFamily, Error, WriteOptions};
+use crate::{transactions::handle::Handle, ColumnFamily, Error, WriteOptions};
 
-pub trait Delete<W> {
-    fn delete_full<K>(&self, key: K, writeopts: Option<&W>) -> Result<(), Error>
-    where
-        K: AsRef<[u8]>;
-
-    /// Remove the database entry for key.
-    ///
-    /// Returns an error if the key was not found.
-    fn delete<K>(&self, key: K) -> Result<(), Error>
+pub trait Put<W> {
+    fn put_full<K, V>(&self, key: K, value: V, writeopts: Option<&W>) -> Result<(), Error>
     where
         K: AsRef<[u8]>,
+        V: AsRef<[u8]>;
+
+    /// Insert a value into the database under the given key.
+    fn put<K, V>(&self, key: K, value: V) -> Result<(), Error>
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
     {
-        self.delete_full(key, None)
+        self.put_full(key, value, None)
     }
 
-    fn delete_opt<K>(&self, key: K, writeopts: &W) -> Result<(), Error>
+    fn put_opt<K, V>(&self, key: K, value: V, writeopts: &W) -> Result<(), Error>
     where
         K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
     {
-        self.delete_full(key, Some(writeopts))
+        self.put_full(key, value, Some(writeopts))
     }
 }
 
-pub trait DeleteCF<W> {
-    fn delete_cf_full<K>(
+pub trait PutCF<W> {
+    fn put_cf_full<K, V>(
         &self,
         cf: Option<&ColumnFamily>,
         key: K,
+        value: V,
         writeopts: Option<&W>,
     ) -> Result<(), Error>
     where
-        K: AsRef<[u8]>;
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>;
 
-    fn delete_cf<K>(&self, cf: &ColumnFamily, key: K) -> Result<(), Error>
+    fn put_cf<K, V>(&self, cf: &ColumnFamily, key: K, value: V) -> Result<(), Error>
     where
         K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
     {
-        self.delete_cf_full(Some(cf), key, None)
+        self.put_cf_full(Some(cf), key, value, None)
     }
 
-    fn put_cf_opt<K>(&self, cf: &ColumnFamily, key: K, writeopts: &W) -> Result<(), Error>
+    fn put_cf_opt<K, V>(
+        &self,
+        cf: &ColumnFamily,
+        key: K,
+        value: V,
+        writeopts: &W,
+    ) -> Result<(), Error>
     where
         K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
     {
-        self.delete_cf_full(Some(cf), key, Some(writeopts))
+        self.put_cf_full(Some(cf), key, value, Some(writeopts))
     }
 }
 
-impl<T, W> Delete<W> for T
+impl<T, W> Put<W> for T
 where
-    T: DeleteCF<W>,
+    T: PutCF<W>,
 {
-    fn delete_full<K: AsRef<[u8]>>(&self, key: K, writeopts: Option<&W>) -> Result<(), Error> {
-        self.delete_cf_full(None, key, writeopts)
+    fn put_full<K: AsRef<[u8]>, V: AsRef<[u8]>>(
+        &self,
+        key: K,
+        value: V,
+        writeopts: Option<&W>,
+    ) -> Result<(), Error> {
+        self.put_cf_full(None, key, value, writeopts)
     }
 }
 
-impl<T> DeleteCF<WriteOptions> for T
+impl<T> PutCF<WriteOptions> for T
 where
     T: Handle<ffi::rocksdb_t> + super::Write,
 {
-    fn delete_cf_full<K>(
+    fn put_cf_full<K, V>(
         &self,
         cf: Option<&ColumnFamily>,
         key: K,
+        value: V,
         writeopts: Option<&WriteOptions>,
     ) -> Result<(), Error>
     where
         K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
     {
         let mut default_writeopts = None;
 
         let wo_handle = WriteOptions::input_or_default(writeopts, &mut default_writeopts)?;
 
         let key = key.as_ref();
+        let value = value.as_ref();
         let key_ptr = key.as_ptr() as *const c_char;
         let key_len = key.len() as size_t;
+        let val_ptr = value.as_ptr() as *const c_char;
+        let val_len = value.len() as size_t;
 
         unsafe {
             match cf {
-                Some(cf) => ffi_try!(ffi::rocksdb_delete_cf(
+                Some(cf) => ffi_try!(ffi::rocksdb_put_cf(
                     self.handle(),
                     wo_handle,
                     cf.handle(),
                     key_ptr,
                     key_len,
+                    val_ptr,
+                    val_len,
                 )),
-                None => ffi_try!(ffi::rocksdb_delete(
+                None => ffi_try!(ffi::rocksdb_put(
                     self.handle(),
                     wo_handle,
                     key_ptr,
                     key_len,
+                    val_ptr,
+                    val_len,
                 )),
             }
 

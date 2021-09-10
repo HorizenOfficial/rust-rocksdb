@@ -3,9 +3,16 @@ extern crate rocksdb;
 mod util;
 
 use rocksdb::{
-    ops::*, ColumnFamily, Error, DB,
-    MergeOperands, Options, ReadOptions, WriteOptions,
-    TemporaryDBPath, TransactionDB, TransactionDBOptions, TransactionOptions
+    MergeOperands, Options, WriteOptions,
+    transactions::{
+        ops::*,
+        transaction_db::{
+            TransactionDB,
+            TransactionDBOptions,
+            TransactionOptions
+        },
+        util::TemporaryDBPath
+    }
 };
 
 #[test]
@@ -21,26 +28,41 @@ pub fn test_transaction() {
         trans.put(b"k3", b"v3").unwrap();
         trans.put(b"k4", b"v4").unwrap();
 
+        assert_eq!(&*trans.get(b"k1").unwrap().unwrap(), b"v1");
+        assert_eq!(&*trans.get(b"k2").unwrap().unwrap(), b"v2");
+        assert_eq!(&*trans.get(b"k3").unwrap().unwrap(), b"v3");
+        assert_eq!(&*trans.get(b"k4").unwrap().unwrap(), b"v4");
+
         trans.commit().unwrap();
 
         let trans2 = db.transaction_default();
 
         let mut iter = trans2.raw_iterator();
 
-        iter.seek_to_first();
+        iter.seek_to_first(); // k1
 
         assert_eq!(iter.valid(), true);
         assert_eq!(iter.key(), Some(b"k1".to_vec().as_slice()));
         assert_eq!(iter.value(), Some(b"v1".to_vec().as_slice()));
 
-        iter.next();
+        iter.next(); // k2
 
         assert_eq!(iter.valid(), true);
         assert_eq!(iter.key(), Some(b"k2".to_vec().as_slice()));
         assert_eq!(iter.value(), Some(b"v2".to_vec().as_slice()));
 
         iter.next(); // k3
+
+        assert_eq!(iter.valid(), true);
+        assert_eq!(iter.key(), Some(b"k3".to_vec().as_slice()));
+        assert_eq!(iter.value(), Some(b"v3".to_vec().as_slice()));
+
         iter.next(); // k4
+
+        assert_eq!(iter.valid(), true);
+        assert_eq!(iter.key(), Some(b"k4".to_vec().as_slice()));
+        assert_eq!(iter.value(), Some(b"v4".to_vec().as_slice()));
+
         iter.next(); // invalid!
 
         assert_eq!(iter.valid(), false);
@@ -49,11 +71,11 @@ pub fn test_transaction() {
 
         let trans3 = db.transaction_default();
 
-        trans2.put(b"k2", b"v5").unwrap();
-        trans3.put(b"k2", b"v6").unwrap_err();
+        assert!(trans2.put(b"k2", b"v5").is_ok());
+        // Attempt to change the same key in parallel transaction
+        assert!(trans3.put(b"k2", b"v6").is_err());
 
         trans3.commit().unwrap();
-
         trans2.commit().unwrap();
     }
 }
@@ -81,32 +103,30 @@ pub fn test_transaction_rollback_savepoint() {
 
         let trans3 = db.transaction(&write_options, &transaction_options);
 
-        let k1_2 = trans2.get(b"k1").unwrap().unwrap();
-        assert_eq!(&*k1_2, b"v1");
+        assert_eq!(&*trans2.get(b"k1").unwrap().unwrap(), b"v1");
 
         trans3.delete(b"k1").unwrap();
+        assert!(trans3.get(b"k1").unwrap().is_none());
 
-        let k1_2 = trans2.get(b"k1").unwrap().unwrap();
-        assert_eq!(&*k1_2, b"v1");
+        assert_eq!(&*trans2.get(b"k1").unwrap().unwrap(), b"v1");
 
         trans3.rollback().unwrap();
-
-        let k1_2 = trans2.get(b"k1").unwrap().unwrap();
-        assert_eq!(&*k1_2, b"v1");
+        assert_eq!(&*trans3.get(b"k1").unwrap().unwrap(), b"v1");
 
         let trans4 = db.transaction(&write_options, &transaction_options);
+
+        assert_eq!(&*trans2.get(b"k1").unwrap().unwrap(), b"v1");
 
         trans4.delete(b"k1").unwrap();
         trans4.set_savepoint();
         trans4.put(b"k2", b"v2").unwrap();
         trans4.rollback_to_savepoint().unwrap();
+        trans4.put(b"k3", b"v3").unwrap();
         trans4.commit().unwrap();
 
-        let k1_2 = trans2.get(b"k1").unwrap();
-        assert!(k1_2.is_none());
-
-        let k2_2 = trans2.get(b"k2").unwrap();
-        assert!(k2_2.is_none());
+        assert!(trans2.get(b"k1").unwrap().is_none());
+        assert!(trans2.get(b"k2").unwrap().is_none());
+        assert_eq!(&*trans2.get(b"k3").unwrap().unwrap(), b"v3");
 
         trans2.commit().unwrap();
     }
@@ -147,8 +167,10 @@ pub fn test_transaction_snapshot() {
         trans4.commit().unwrap();
         drop(trans4);
 
+        // Transaction returns value according to the current state of DB
         assert!(trans3.get(b"k1").unwrap().is_none());
 
+        // Snapshot inside of transaction returns value according to a state of DB at the moment of trans3 creation
         let k1_3 = trans3.snapshot().get(b"k1").unwrap().unwrap();
         assert_eq!(&*k1_3, b"v1");
 
@@ -188,16 +210,21 @@ pub fn test_transaction_get_for_update() {
             .expect("k1 is not exists");
         assert_eq!(&*v1, b"v1");
 
+        // k1 is locked for updating outside of the current transaction
         assert!(db.put("k1", "v2").is_err());
+        // k1 can be updated within the current transaction
+        assert!(tran1.put("k1", "v11").is_ok());
 
-        let v1 = tran1
+        let v11 = tran1
             .get_for_update("k1")
             .expect("failed to get for update k1")
             .expect("k1 is not exists");
-        assert_eq!(&*v1, b"v1");
+        assert_eq!(&*v11, b"v11");
 
-        tran1.put("k2", "v2").expect("failed to put k1 v1");
+        tran1.put("k2", "v2").expect("failed to put k2 v2");
         tran1.commit().unwrap();
+
+        assert_eq!(&*db.get(b"k1").unwrap().unwrap(), b"v11");
     }
 }
 
@@ -211,9 +238,8 @@ pub fn test_transaction_get_for_update_cf() {
 
         let mut db = TransactionDB::open_with_descriptor(&opts, &path, topts).unwrap();
 
-        db.create_cf("cf1", &opts)
-            .expect("failed to create new column family cf1");
-        let cf1 = db.cf_handle("cf1").expect("column family not exists.");
+        db.create_cf("cf1", &opts).expect("failed to create new column family cf1");
+        let cf1 = db.cf_handle("cf1").expect("column family does not exist");
 
         db.put_cf(cf1, "k1", "v1").expect("failed to put k1 v1");
         let v1 = db
@@ -226,7 +252,7 @@ pub fn test_transaction_get_for_update_cf() {
         let v1 = tran1
             .get_for_update_cf(cf1, "k1")
             .expect("failed to get for update k1")
-            .expect("k1 is not exists");
+            .expect("k1 does not exist");
         assert_eq!(&*v1, b"v1");
 
         assert!(db.put_cf(cf1, "k1", "v2").is_err());
@@ -234,7 +260,7 @@ pub fn test_transaction_get_for_update_cf() {
         let v1 = tran1
             .get_for_update_cf(cf1, "k1")
             .expect("failed to get for update k1")
-            .expect("k1 is not exists");
+            .expect("k1 does not exist");
         assert_eq!(&*v1, b"v1");
 
         tran1.put_cf(cf1, "k2", "v2").expect("failed to put k1 v1");

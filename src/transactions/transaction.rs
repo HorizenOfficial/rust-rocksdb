@@ -1,11 +1,14 @@
 use crate::{
-    handle::{ConstHandle, Handle},
-    ops::*,
-    ColumnFamily, DBRawIterator, DBVector, Error, ReadOptions,
+    ColumnFamily, DBRawIterator, Error, ReadOptions,
 };
 use ffi;
 use libc::{c_char, c_uchar, c_void, size_t};
 use std::marker::PhantomData;
+use crate::transactions::{
+    db_vector::DBVector,
+    handle::{Handle, ConstHandle},
+    ops::*
+};
 
 pub struct Transaction<'a, T> {
     inner: *mut ffi::rocksdb_transaction_t,
@@ -198,12 +201,6 @@ where
 }
 impl<'a, T> Iterate for Transaction<'a, T> {
     fn get_raw_iter(&self, readopts: &ReadOptions) -> DBRawIterator {
-        // unsafe {
-        //     DBRawIterator {
-        //         inner: ffi::rocksdb_transaction_create_iterator(self.inner, readopts.handle()),
-        //         db: PhantomData,
-        //     }
-        // }
         unsafe {
             DBRawIterator::new_raw(
                 ffi::rocksdb_transaction_create_iterator(
@@ -222,16 +219,6 @@ impl<'a, T> IterateCF for Transaction<'a, T> {
         cf_handle: &ColumnFamily,
         readopts: &ReadOptions,
     ) -> Result<DBRawIterator, Error> {
-        // unsafe {
-        //     Ok(DBRawIterator {
-        //         inner: ffi::rocksdb_transaction_create_iterator_cf(
-        //             self.inner,
-        //             readopts.handle(),
-        //             cf_handle.inner,
-        //         ),
-        //         db: PhantomData,
-        //     })
-        // }
         unsafe {
             Ok(
                 DBRawIterator::new_raw(

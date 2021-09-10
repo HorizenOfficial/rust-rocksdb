@@ -1,4 +1,4 @@
-use crate::{checkpoint::Checkpoint, handle::Handle, Error};
+use crate::{checkpoint::Checkpoint, transactions::handle::Handle, Error};
 use ffi;
 
 pub trait CreateCheckpointObject {

@@ -31,7 +31,7 @@ use crate::{
     slice_transform::SliceTransform,
     Error, SnapshotWithThreadMode,
 };
-use crate::handle::{Handle, ConstHandle};
+use crate::transactions::handle::{Handle, ConstHandle};
 
 fn new_cache(capacity: size_t) -> *mut ffi::rocksdb_cache_t {
     unsafe { ffi::rocksdb_cache_create_lru(capacity) }

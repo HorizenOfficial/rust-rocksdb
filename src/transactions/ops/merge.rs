@@ -1,7 +1,7 @@
 use ffi;
 use libc::{c_char, size_t};
 
-use crate::{handle::Handle, ColumnFamily, Error, WriteOptions};
+use crate::{transactions::handle::Handle, ColumnFamily, Error, WriteOptions};
 
 pub trait Merge<W> {
     fn merge_full<K, V>(&self, key: K, value: V, writeopts: Option<&W>) -> Result<(), Error>

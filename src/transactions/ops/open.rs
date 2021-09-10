@@ -15,7 +15,7 @@
 
 use std::path::Path;
 
-use crate::open_raw::{OpenRaw, OpenRawInput};
+use crate::transactions::open_raw::{OpenRaw, OpenRawInput};
 use crate::{ColumnFamilyDescriptor, Error, Options};
 
 pub trait Open: OpenRaw {

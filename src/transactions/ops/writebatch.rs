@@ -1,6 +1,6 @@
 use ffi;
 
-use crate::{handle::Handle, Error, WriteBatch, WriteOptions};
+use crate::{transactions::handle::Handle, Error, WriteBatch, WriteOptions};
 
 pub trait WriteOps {
     fn write_full(&self, batch: WriteBatch, writeopts: Option<&WriteOptions>) -> Result<(), Error>;

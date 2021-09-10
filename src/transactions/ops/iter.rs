@@ -4,13 +4,6 @@ pub trait Iterate {
     fn get_raw_iter(&self, readopts: &ReadOptions) -> DBRawIterator;
 
     fn get_iter(&self, readopts: &ReadOptions, mode: IteratorMode) -> DBIterator {
-        // let mut rv = DBIterator {
-        //     raw: self.get_raw_iter(readopts),
-        //     direction: Direction::Forward, // blown away by set_mode()
-        //     just_seeked: false,
-        // };
-        // rv.set_mode(mode);
-        // rv
         DBIterator::new_raw(self.get_raw_iter(readopts), mode)
     }
 
@@ -57,13 +50,6 @@ pub trait IterateCF: Iterate {
         readopts: &ReadOptions,
         mode: IteratorMode,
     ) -> Result<DBIterator, Error> {
-        // let mut rv = DBIterator {
-        //     raw: self.get_raw_iter_cf(cf_handle, readopts)?,
-        //     direction: Direction::Forward, // blown away by set_mode()
-        //     just_seeked: false,
-        // };
-        // rv.set_mode(mode);
-        // Ok(rv)
         Ok(DBIterator::new_raw(self.get_raw_iter_cf(cf_handle, readopts)?, mode))
     }
 
