@@ -44,7 +44,7 @@ pub use self::put::{Put, PutCF};
 pub use self::iter::{Iterate, IterateCF};
 pub use self::writebatch::WriteOps;
 pub use self::open::{Open, OpenCF};
-pub use self::columnfamily::CreateCf;
+pub use self::columnfamily::{CreateCf, DropCf};
 pub use self::columnfamily::GetColumnFamilies;
 pub use self::transaction::TransactionBegin;
 pub use self::checkpoint::CreateCheckpointObject;

@@ -3,23 +3,23 @@ use crate::{
 };
 use ffi;
 use libc::{c_char, c_uchar, c_void, size_t};
-use std::marker::PhantomData;
 use crate::transactions::{
     db_vector::DBVector,
     handle::{Handle, ConstHandle},
     ops::*
 };
+use std::ptr::null_mut;
 
-pub struct Transaction<'a, T> {
+pub struct Transaction {
     inner: *mut ffi::rocksdb_transaction_t,
-    db: PhantomData<&'a T>,
 }
 
-impl<'a, T> Transaction<'a, T> {
-    pub(crate) fn new(inner: *mut ffi::rocksdb_transaction_t) -> Transaction<'a, T> {
-        Transaction {
-            inner,
-            db: PhantomData,
+impl<'a> Transaction {
+    pub(crate) fn new(inner: *mut ffi::rocksdb_transaction_t) -> Result<Transaction, Error> {
+        if inner != null_mut(){
+            Ok(Transaction { inner })
+        } else {
+            Err(Error::new("Transaction's inner pointer is NULL".into()))
         }
     }
 
@@ -49,7 +49,7 @@ impl<'a, T> Transaction<'a, T> {
     }
 
     /// Get Snapshot
-    pub fn snapshot(&'a self) -> TransactionSnapshot<'a, T> {
+    pub fn snapshot(&self) -> TransactionSnapshot {
         unsafe {
             let snapshot = ffi::rocksdb_transaction_get_snapshot(self.inner);
             TransactionSnapshot {
@@ -136,7 +136,7 @@ impl<'a, T> Transaction<'a, T> {
     }
 }
 
-impl<'a, T> Drop for Transaction<'a, T> {
+impl Drop for Transaction {
     fn drop(&mut self) {
         unsafe {
             ffi::rocksdb_transaction_destroy(self.inner);
@@ -144,17 +144,17 @@ impl<'a, T> Drop for Transaction<'a, T> {
     }
 }
 
-impl<'a, T> Handle<ffi::rocksdb_transaction_t> for Transaction<'a, T> {
+impl Handle<ffi::rocksdb_transaction_t> for Transaction {
     fn handle(&self) -> *mut ffi::rocksdb_transaction_t {
         self.inner
     }
 }
 
-impl<'a, T> Read for Transaction<'a, T> {}
+impl Read for Transaction {}
 
-impl<'a, T> GetCF<ReadOptions> for Transaction<'a, T>
+impl GetCF<ReadOptions> for Transaction
 where
-    Transaction<'a, T>: Handle<ffi::rocksdb_transaction_t> + Read,
+    Transaction: Handle<ffi::rocksdb_transaction_t> + Read,
 {
     fn get_cf_full<K: AsRef<[u8]>>(
         &self,
@@ -199,7 +199,7 @@ where
         }
     }
 }
-impl<'a, T> Iterate for Transaction<'a, T> {
+impl Iterate for Transaction {
     fn get_raw_iter(&self, readopts: &ReadOptions) -> DBRawIterator {
         unsafe {
             DBRawIterator::new_raw(
@@ -213,7 +213,7 @@ impl<'a, T> Iterate for Transaction<'a, T> {
     }
 }
 
-impl<'a, T> IterateCF for Transaction<'a, T> {
+impl IterateCF for Transaction {
     fn get_raw_iter_cf(
         &self,
         cf_handle: &ColumnFamily,
@@ -234,22 +234,22 @@ impl<'a, T> IterateCF for Transaction<'a, T> {
     }
 }
 
-pub struct TransactionSnapshot<'a, T> {
-    db: &'a Transaction<'a, T>,
+pub struct TransactionSnapshot<'a> {
+    db: &'a Transaction,
     inner: *const ffi::rocksdb_snapshot_t,
 }
 
-impl<'a, T> ConstHandle<ffi::rocksdb_snapshot_t> for TransactionSnapshot<'a, T> {
+impl<'a> ConstHandle<ffi::rocksdb_snapshot_t> for TransactionSnapshot<'a> {
     fn const_handle(&self) -> *const ffi::rocksdb_snapshot_t {
         self.inner
     }
 }
 
-impl<'a, T> Read for TransactionSnapshot<'a, T> {}
+impl<'a> Read for TransactionSnapshot<'a> {}
 
-impl<'a, T> GetCF<ReadOptions> for TransactionSnapshot<'a, T>
+impl<'a> GetCF<ReadOptions> for TransactionSnapshot<'a>
 where
-    Transaction<'a, T>: GetCF<ReadOptions>,
+    Transaction: GetCF<ReadOptions>,
 {
     fn get_cf_full<K: AsRef<[u8]>>(
         &self,
@@ -263,7 +263,7 @@ where
     }
 }
 
-impl<'a, T> PutCF<()> for Transaction<'a, T> {
+impl PutCF<()> for Transaction {
     fn put_cf_full<K, V>(
         &self,
         cf: Option<&ColumnFamily>,
@@ -306,7 +306,7 @@ impl<'a, T> PutCF<()> for Transaction<'a, T> {
     }
 }
 
-impl<'a, T> MergeCF<()> for Transaction<'a, T> {
+impl MergeCF<()> for Transaction {
     fn merge_cf_full<K, V>(
         &self,
         cf: Option<&ColumnFamily>,
@@ -349,7 +349,7 @@ impl<'a, T> MergeCF<()> for Transaction<'a, T> {
     }
 }
 
-impl<'a, T> DeleteCF<()> for Transaction<'a, T> {
+impl DeleteCF<()> for Transaction {
     fn delete_cf_full<K>(
         &self,
         cf: Option<&ColumnFamily>,
@@ -383,7 +383,7 @@ impl<'a, T> DeleteCF<()> for Transaction<'a, T> {
     }
 }
 
-impl<'a, T> Drop for TransactionSnapshot<'a, T> {
+impl<'a> Drop for TransactionSnapshot<'a> {
     fn drop(&mut self) {
         unsafe {
             ffi::rocksdb_free(self.inner as *mut c_void);
@@ -391,7 +391,7 @@ impl<'a, T> Drop for TransactionSnapshot<'a, T> {
     }
 }
 
-impl<'a, T: Iterate> Iterate for TransactionSnapshot<'a, T> {
+impl<'a> Iterate for TransactionSnapshot<'a> {
     fn get_raw_iter(&self, readopts: &ReadOptions) -> DBRawIterator {
         let mut readopts = readopts.to_owned();
         readopts.set_transaction_snapshot(self);
@@ -399,7 +399,7 @@ impl<'a, T: Iterate> Iterate for TransactionSnapshot<'a, T> {
     }
 }
 
-impl<'a, T: IterateCF> IterateCF for TransactionSnapshot<'a, T> {
+impl<'a> IterateCF for TransactionSnapshot<'a> {
     fn get_raw_iter_cf(
         &self,
         cf_handle: &ColumnFamily,

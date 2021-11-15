@@ -39,6 +39,7 @@ impl Handle<ffi::rocksdb_transactiondb_t> for TransactionDB {
 }
 
 impl Open for TransactionDB {}
+impl OpenCF for TransactionDB {}
 
 impl OpenRaw for TransactionDB {
     type Descriptor = TransactionDBOptions;
@@ -111,7 +112,7 @@ impl TransactionBegin for TransactionDB {
         &self,
         write_options: &WriteOptions,
         tx_options: &TransactionOptions,
-    ) -> Transaction<TransactionDB> {
+    ) -> Result<Transaction, Error> {
         unsafe {
             let inner = ffi::rocksdb_transaction_begin(
                 self.handle(),
@@ -496,6 +497,26 @@ impl CreateCf for TransactionDB {
         Ok(())
     }
 }
+
+// librocksdb-sys doesn't contain an appropriate method for TransationDB, only this one for usual DB:
+// pub fn rocksdb_drop_column_family(
+//         db: *mut rocksdb_t,
+//         handle: *mut rocksdb_column_family_handle_t,
+//         errptr: *mut *mut libc::c_char,
+//     );
+
+// impl DropCf for TransactionDB{
+//     fn drop_cf(&mut self, name: &str) -> Result<(), Error> {
+//         let cf = self
+//             .get_mut_cfs()
+//             .remove(name)
+//             .ok_or_else(|| Error::new(format!("Invalid column family: {}", name).to_owned()))?;
+//         unsafe {
+//             ffi_try!(ffi::rocksdb_transactiondb_drop_column_family(self.handle(), cf.handle()));
+//         }
+//         Ok(())
+//     }
+// }
 
 impl TransactionDB {
     pub fn snapshot(&self) -> Snapshot {

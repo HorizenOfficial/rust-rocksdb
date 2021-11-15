@@ -142,7 +142,7 @@ pub struct Error {
 }
 
 impl Error {
-    fn new(message: String) -> Error {
+    pub fn new(message: String) -> Error {
         Error { message }
     }
 

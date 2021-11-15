@@ -14,6 +14,7 @@ use rocksdb::{
         util::TemporaryDBPath
     }
 };
+use std::convert::TryInto;
 
 #[test]
 pub fn test_transaction() {
@@ -21,7 +22,7 @@ pub fn test_transaction() {
     {
         let db = TransactionDB::open_default(&n).unwrap();
 
-        let trans = db.transaction_default();
+        let trans = db.transaction_default().unwrap();
 
         trans.put(b"k1", b"v1").unwrap();
         trans.put(b"k2", b"v2").unwrap();
@@ -35,7 +36,7 @@ pub fn test_transaction() {
 
         trans.commit().unwrap();
 
-        let trans2 = db.transaction_default();
+        let trans2 = db.transaction_default().unwrap();
 
         let mut iter = trans2.raw_iterator();
 
@@ -69,7 +70,7 @@ pub fn test_transaction() {
         assert_eq!(iter.key(), None);
         assert_eq!(iter.value(), None);
 
-        let trans3 = db.transaction_default();
+        let trans3 = db.transaction_default().unwrap();
 
         assert!(trans2.put(b"k2", b"v5").is_ok());
         // Attempt to change the same key in parallel transaction
@@ -91,8 +92,8 @@ pub fn test_transaction_rollback_savepoint() {
         let write_options = WriteOptions::default();
         let transaction_options = TransactionOptions::new();
 
-        let trans1 = db.transaction(&write_options, &transaction_options);
-        let trans2 = db.transaction(&write_options, &transaction_options);
+        let trans1 = db.transaction(&write_options, &transaction_options).unwrap();
+        let trans2 = db.transaction(&write_options, &transaction_options).unwrap();
 
         trans1.put(b"k1", b"v1").unwrap();
 
@@ -101,7 +102,7 @@ pub fn test_transaction_rollback_savepoint() {
 
         trans1.commit().unwrap();
 
-        let trans3 = db.transaction(&write_options, &transaction_options);
+        let trans3 = db.transaction(&write_options, &transaction_options).unwrap();
 
         assert_eq!(&*trans2.get(b"k1").unwrap().unwrap(), b"v1");
 
@@ -113,7 +114,7 @@ pub fn test_transaction_rollback_savepoint() {
         trans3.rollback().unwrap();
         assert_eq!(&*trans3.get(b"k1").unwrap().unwrap(), b"v1");
 
-        let trans4 = db.transaction(&write_options, &transaction_options);
+        let trans4 = db.transaction(&write_options, &transaction_options).unwrap();
 
         assert_eq!(&*trans2.get(b"k1").unwrap().unwrap(), b"v1");
 
@@ -142,12 +143,12 @@ pub fn test_transaction_snapshot() {
 
         let write_options = WriteOptions::default();
         let transaction_options = TransactionOptions::new();
-        let trans1 = db.transaction(&write_options, &transaction_options);
+        let trans1 = db.transaction(&write_options, &transaction_options).unwrap();
 
         let mut transaction_options_snapshot = TransactionOptions::new();
         transaction_options_snapshot.set_snapshot(true);
         // create transaction with snapshot
-        let trans2 = db.transaction(&write_options, &transaction_options_snapshot);
+        let trans2 = db.transaction(&write_options, &transaction_options_snapshot).unwrap();
 
         trans1.put(b"k1", b"v1").unwrap();
 
@@ -160,9 +161,9 @@ pub fn test_transaction_snapshot() {
         trans2.commit().unwrap();
         drop(trans2);
 
-        let trans3 = db.transaction(&write_options, &transaction_options_snapshot);
+        let trans3 = db.transaction(&write_options, &transaction_options_snapshot).unwrap();
 
-        let trans4 = db.transaction(&write_options, &transaction_options);
+        let trans4 = db.transaction(&write_options, &transaction_options).unwrap();
         trans4.delete(b"k1").unwrap();
         trans4.commit().unwrap();
         drop(trans4);
@@ -177,7 +178,7 @@ pub fn test_transaction_snapshot() {
         trans3.commit().unwrap();
         drop(trans3);
 
-        let trans5 = db.transaction(&write_options, &transaction_options_snapshot);
+        let trans5 = db.transaction(&write_options, &transaction_options_snapshot).unwrap();
 
         let k1_5 = trans5.snapshot().get(b"k1").unwrap();
         assert!(k1_5.is_none());
@@ -203,7 +204,7 @@ pub fn test_transaction_get_for_update() {
             .expect("k1 is not exists");
         assert_eq!(&*v1, b"v1");
 
-        let tran1 = db.transaction_default();
+        let tran1 = db.transaction_default().unwrap();
         let v1 = tran1
             .get_for_update("k1")
             .expect("failed to get for update k1")
@@ -248,7 +249,7 @@ pub fn test_transaction_get_for_update_cf() {
             .expect("k1 is not exists");
         assert_eq!(&*v1, b"v1");
 
-        let tran1 = db.transaction_default();
+        let tran1 = db.transaction_default().unwrap();
         let v1 = tran1
             .get_for_update_cf(cf1, "k1")
             .expect("failed to get for update k1")
@@ -311,7 +312,7 @@ pub fn test_transaction_merge() {
         opts.create_if_missing(true);
         opts.set_merge_operator("test operator", concat_merge, test_counting_partial_merge);
         let db = TransactionDB::open(&opts, &path).unwrap();
-        let trans1 = db.transaction_default();
+        let trans1 = db.transaction_default().unwrap();
 
         trans1.put(b"k1", b"a").unwrap();
         trans1.merge(b"k1", b"b").unwrap();
@@ -332,10 +333,39 @@ pub fn test_transaction_merge() {
         assert_eq!(&*db.get(b"k1").unwrap().unwrap(), merged_value);
 
         // transaction started for the updated DB also contains all the updates from previously committed transaction
-        let trans2 = db.transaction_default();
+        let trans2 = db.transaction_default().unwrap();
         assert_eq!(&*trans2.get(b"k1").unwrap().unwrap(), merged_value);
 
         // Empty transaction can be successfully committed
         trans2.commit().unwrap();
     }
+}
+
+#[test]
+pub fn test_transaction_cfs(){
+    let path = TemporaryDBPath::new();
+
+    let mut opts = Options::default();
+    opts.create_if_missing(true);
+    // let mut db = TransactionDB::open_with_descriptor(&opts, &path, TransactionDBOptions::default()).unwrap();
+
+    // the 'default' cf doesn't being loaded with non-cf version of 'DB.open'
+    // let mut db = TransactionDB::open_default(&path).unwrap();
+    let mut db = TransactionDB::open_cf_default(&opts, &path).unwrap();
+
+    db.create_cf("cf1", &opts).expect("failed to create new column family cf1");
+    db.create_cf("cf2", &opts).expect("failed to create new column family cf2");
+    // db.drop_cf("cf2").expect("failed to drop column family cf2");
+
+    assert!(db.cf_handle("default").is_some());
+    assert!(db.cf_handle("cf1").is_some());
+    assert!(db.cf_handle("cf2").is_some());
+
+    std::mem::drop(db);
+
+    let db_cf = TransactionDB::open_cf_all(&opts, &path).unwrap();
+
+    assert!(db_cf.cf_handle("default").is_some());
+    assert!(db_cf.cf_handle("cf1").is_some());
+    assert!(db_cf.cf_handle("cf2").is_some());
 }
