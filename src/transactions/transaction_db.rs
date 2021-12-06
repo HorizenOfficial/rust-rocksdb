@@ -30,6 +30,13 @@ impl TransactionDB {
     pub fn path(&self) -> &Path {
         &self.path.as_path()
     }
+    pub fn dummy_db() -> Self {
+        TransactionDB{
+            inner: std::ptr::null_mut(),
+            path: PathBuf::new(),
+            cfs: BTreeMap::new()
+        }
+    }
 }
 
 impl Handle<ffi::rocksdb_transactiondb_t> for TransactionDB {
@@ -164,7 +171,9 @@ impl Drop for TransactionDB {
     fn drop(&mut self) {
         unsafe {
             self.cfs.clear(); // Cause all ColumnFamily objects to be Drop::drop()-ed.
-            ffi::rocksdb_transactiondb_close(self.inner);
+            if !self.inner.is_null(){
+                ffi::rocksdb_transactiondb_close(self.inner)
+            }
         }
     }
 }
