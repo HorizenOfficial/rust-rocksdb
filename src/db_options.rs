@@ -31,6 +31,7 @@ use crate::{
     slice_transform::SliceTransform,
     Error, SnapshotWithThreadMode,
 };
+use crate::transactions::handle::{Handle, ConstHandle};
 
 fn new_cache(capacity: size_t) -> *mut ffi::rocksdb_cache_t {
     unsafe { ffi::rocksdb_cache_create_lru(capacity) }
@@ -449,11 +450,23 @@ impl Drop for WriteOptions {
     }
 }
 
+impl Handle<ffi::rocksdb_writeoptions_t> for WriteOptions {
+    fn handle(&self) -> *mut ffi::rocksdb_writeoptions_t {
+        self.inner
+    }
+}
+
 impl Drop for ReadOptions {
     fn drop(&mut self) {
         unsafe {
             ffi::rocksdb_readoptions_destroy(self.inner);
         }
+    }
+}
+
+impl Handle<ffi::rocksdb_readoptions_t> for ReadOptions {
+    fn handle(&self) -> *mut ffi::rocksdb_readoptions_t {
+        self.inner
     }
 }
 
@@ -787,6 +800,18 @@ impl Default for CuckooTableOptions {
         }
         Self { inner: opts }
     }
+}
+
+// Verbosity of the LOG.
+#[derive(Debug, Copy, Clone, PartialEq)]
+#[repr(i32)]
+pub enum LogLevel {
+    Debug = 0,
+    Info,
+    Warn,
+    Error,
+    Fatal,
+    Header,
 }
 
 impl Options {
@@ -1377,6 +1402,25 @@ impl Options {
         let p = CString::new(path.as_ref().to_string_lossy().as_bytes()).unwrap();
         unsafe {
             ffi::rocksdb_options_set_db_log_dir(self.inner, p.as_ptr());
+        }
+    }
+
+    /// Specifies the log level.
+    /// Consider the `LogLevel` enum for a list of possible levels.
+    ///
+    /// Default: Info
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rocksdb::{Options, LogLevel};
+    ///
+    /// let mut opts = Options::default();
+    /// opts.set_log_level(LogLevel::Warn);
+    /// ```
+    pub fn set_log_level(&mut self, level: LogLevel) {
+        unsafe {
+            ffi::rocksdb_options_set_info_log_level(self.inner, level as c_int);
         }
     }
 
@@ -2931,6 +2975,12 @@ impl Default for Options {
     }
 }
 
+impl ConstHandle<ffi::rocksdb_options_t> for Options {
+    fn const_handle(&self) -> *const ffi::rocksdb_options_t {
+        self.inner
+    }
+}
+
 impl FlushOptions {
     pub fn new() -> FlushOptions {
         FlushOptions::default()
@@ -3041,6 +3091,22 @@ impl WriteOptions {
             ffi::rocksdb_writeoptions_set_memtable_insert_hint_per_batch(self.inner, v as c_uchar);
         }
     }
+
+    pub(crate) fn input_or_default(
+        input: Option<&WriteOptions>,
+        default_writeopts: &mut Option<WriteOptions>,
+    ) -> Result<*mut ffi::rocksdb_writeoptions_t, Error> {
+        if default_writeopts.is_none() {
+            default_writeopts.replace(WriteOptions::default());
+        }
+
+        let wo_handle = input
+            .or_else(|| default_writeopts.as_ref())
+            .ok_or_else(|| Error::new("Unable to extract write options.".to_string()))?
+            .handle();
+
+        Ok(wo_handle)
+    }
 }
 
 impl Default for WriteOptions {
@@ -3054,6 +3120,7 @@ impl Default for WriteOptions {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 #[repr(i32)]
 pub enum ReadTier {
     /// Reads data in memtable, block cache, OS cache or storage.
@@ -3084,6 +3151,15 @@ impl ReadOptions {
     pub(crate) fn set_snapshot<D: DBAccess>(&mut self, snapshot: &SnapshotWithThreadMode<D>) {
         unsafe {
             ffi::rocksdb_readoptions_set_snapshot(self.inner, snapshot.inner);
+        }
+    }
+
+    pub(crate) fn set_transaction_snapshot<T>(&mut self, snapshot: &T)
+        where
+            T: ConstHandle<ffi::rocksdb_snapshot_t>,
+    {
+        unsafe {
+            ffi::rocksdb_readoptions_set_snapshot(self.inner, snapshot.const_handle());
         }
     }
 
@@ -3244,6 +3320,33 @@ impl ReadOptions {
             ffi::rocksdb_readoptions_set_pin_data(self.inner, v as c_uchar);
         }
     }
+
+    pub(crate) fn input_or_default(
+        input: Option<&ReadOptions>,
+        default_readopts: &mut Option<ReadOptions>,
+    ) -> Result<*mut ffi::rocksdb_readoptions_t, Error> {
+        if input.is_none() && default_readopts.is_none() {
+            default_readopts.replace(ReadOptions::default());
+        }
+
+        let ro_handle = input
+            .or_else(|| default_readopts.as_ref())
+            .ok_or_else(|| Error::new("Unable to extract read options.".to_string()))?
+            .handle();
+
+        if ro_handle.is_null() {
+            return Err(Error::new(
+                "Unable to create RocksDB read options. \
+                 This is a fairly trivial call, and its \
+                 failure may be indicative of a \
+                 mis-compiled or mis-loaded RocksDB \
+                 library."
+                    .to_string(),
+            ));
+        }
+
+        Ok(ro_handle)
+    }
 }
 
 impl Default for ReadOptions {
@@ -3255,6 +3358,20 @@ impl Default for ReadOptions {
                 iterate_lower_bound: None,
             }
         }
+    }
+}
+
+impl Clone for ReadOptions {
+    fn clone(&self) -> ReadOptions {
+        let mut ops = ReadOptions::default();
+
+        if let Some(iterate_upper_bound) = &self.iterate_upper_bound {
+            ops.set_iterate_upper_bound(iterate_upper_bound.clone());
+        };
+        if let Some(iterate_lower_bound) = &self.iterate_lower_bound {
+            ops.set_iterate_upper_bound(iterate_lower_bound.clone());
+        };
+        ops
     }
 }
 
@@ -3378,6 +3495,7 @@ pub struct PlainTableFactoryOptions {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub enum DBCompressionType {
     None = ffi::rocksdb_no_compression as isize,
     Snappy = ffi::rocksdb_snappy_compression as isize,
@@ -3389,6 +3507,7 @@ pub enum DBCompressionType {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub enum DBCompactionStyle {
     Level = ffi::rocksdb_level_compaction as isize,
     Universal = ffi::rocksdb_universal_compaction as isize,
@@ -3396,6 +3515,7 @@ pub enum DBCompactionStyle {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub enum DBRecoveryMode {
     TolerateCorruptedTailRecords = ffi::rocksdb_tolerate_corrupted_tail_records_recovery as isize,
     AbsoluteConsistency = ffi::rocksdb_absolute_consistency_recovery as isize,
@@ -3405,6 +3525,7 @@ pub enum DBRecoveryMode {
 
 /// File access pattern once a compaction has started
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 #[repr(i32)]
 pub enum AccessHint {
     None = 0,
@@ -3450,6 +3571,7 @@ impl FifoCompactOptions {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub enum UniversalCompactionStopStyle {
     Similar = ffi::rocksdb_similar_size_compaction_stop_style as isize,
     Total = ffi::rocksdb_total_size_compaction_stop_style as isize,
@@ -3563,6 +3685,7 @@ impl UniversalCompactOptions {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum BottommostLevelCompaction {
     /// Skip bottommost level compaction

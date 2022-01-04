@@ -33,6 +33,16 @@ pub struct Checkpoint<'db> {
 }
 
 impl<'db> Checkpoint<'db> {
+    pub fn new_raw(checkpoint_raw: *mut ffi::rocksdb_checkpoint_t) -> Result<Self, Error> {
+        if checkpoint_raw.is_null() {
+            return Err(Error::new("Could not create checkpoint object.".to_owned()));
+        }
+        Ok(Self {
+            inner: checkpoint_raw,
+            _db: PhantomData,
+        })
+    }
+
     /// Creates new checkpoint object for specific DB.
     ///
     /// Does not actually produce checkpoints, call `.create_checkpoint()` method to produce

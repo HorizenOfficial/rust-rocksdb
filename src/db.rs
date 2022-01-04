@@ -86,7 +86,7 @@ impl ThreadMode for SingleThreaded {
         Self {
             cfs: cfs
                 .into_iter()
-                .map(|(n, c)| (n, ColumnFamily { inner: c }))
+                .map(|(n, c)| (n, ColumnFamily::new(c)))
                 .collect(),
         }
     }
@@ -325,6 +325,32 @@ impl<T: ThreadMode> DBWithThreadMode<T> {
 
         Self::open_cf_descriptors_internal(
             opts,
+            path,
+            cfs,
+            &AccessType::ReadOnly {
+                error_if_log_file_exist,
+            },
+        )
+    }
+
+    /// Opens a database for read only with the given database options and column family names.
+    pub fn open_cf_with_opts_for_read_only<P, I, N>(
+        db_opts: &Options,
+        path: P,
+        cfs: I,
+        error_if_log_file_exist: bool,
+    ) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+        I: IntoIterator<Item = (N, Options)>,
+        N: AsRef<str>,
+    {
+        let cfs = cfs
+            .into_iter()
+            .map(|(name, cf_opts)| ColumnFamilyDescriptor::new(name.as_ref(), cf_opts));
+
+        Self::open_cf_descriptors_internal(
+            db_opts,
             path,
             cfs,
             &AccessType::ReadOnly {
@@ -1774,7 +1800,7 @@ impl DBWithThreadMode<SingleThreaded> {
         let inner = self.create_inner_cf_handle(name.as_ref(), opts)?;
         self.cfs
             .cfs
-            .insert(name.as_ref().to_string(), ColumnFamily { inner });
+            .insert(name.as_ref().to_string(), ColumnFamily::new(inner));
         Ok(())
     }
 

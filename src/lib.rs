@@ -75,6 +75,8 @@
     clippy::upper_case_acronyms,
 )]
 
+extern crate librocksdb_sys as ffi;
+
 #[macro_use]
 mod ffi_util;
 
@@ -94,6 +96,12 @@ mod slice_transform;
 mod snapshot;
 mod sst_file_writer;
 mod write_batch;
+pub mod transactions;
+
+pub use transactions::util::TemporaryDBPath;
+
+pub use transactions::transaction::Transaction;
+pub use transactions::transaction_db::{TransactionDB, TransactionDBOptions, TransactionOptions};
 
 pub use crate::{
     column_family::{
@@ -110,9 +118,10 @@ pub use crate::{
         BlockBasedIndexType, BlockBasedOptions, BottommostLevelCompaction, Cache, CompactOptions,
         CuckooTableOptions, DBCompactionStyle, DBCompressionType, DBPath, DBRecoveryMode,
         DataBlockIndexType, Env, FifoCompactOptions, FlushOptions, IngestExternalFileOptions,
-        MemtableFactory, Options, PlainTableFactoryOptions, ReadOptions, UniversalCompactOptions,
-        UniversalCompactionStopStyle, WriteOptions,
+        LogLevel, MemtableFactory, Options, PlainTableFactoryOptions, ReadOptions,
+        UniversalCompactOptions, UniversalCompactionStopStyle, WriteOptions,
     },
+    transactions::db_vector::DBVector,
     db_pinnable_slice::DBPinnableSlice,
     merge_operator::MergeOperands,
     perf::{PerfContext, PerfMetric, PerfStatsLevel},
@@ -121,8 +130,6 @@ pub use crate::{
     sst_file_writer::SstFileWriter,
     write_batch::{WriteBatch, WriteBatchIterator},
 };
-
-use librocksdb_sys as ffi;
 
 use std::error;
 use std::fmt;
@@ -135,7 +142,7 @@ pub struct Error {
 }
 
 impl Error {
-    fn new(message: String) -> Error {
+    pub fn new(message: String) -> Error {
         Error { message }
     }
 
