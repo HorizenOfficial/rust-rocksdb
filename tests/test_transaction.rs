@@ -274,9 +274,9 @@ pub fn test_transaction_merge() {
     fn concat_merge(
         _new_key: &[u8],
         existing_val: Option<&[u8]>,
-        operands: &mut MergeOperands,
+        operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
-        let mut result: Vec<u8> = Vec::with_capacity(operands.size_hint().0);
+        let mut result: Vec<u8> = Vec::new();
         existing_val.map(|v| {
             for e in v {
                 result.push(*e)
@@ -293,10 +293,9 @@ pub fn test_transaction_merge() {
     fn test_counting_partial_merge(
         _new_key: &[u8],
         _existing_val: Option<&[u8]>,
-        operands: &mut MergeOperands,
+        operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
-        let nops = operands.size_hint().0;
-        let mut result: Vec<u8> = Vec::with_capacity(nops);
+        let mut result: Vec<u8> = Vec::new();
         for op in operands {
             for e in op {
                 result.push(*e);
@@ -349,7 +348,7 @@ pub fn test_transaction_cfs(){
     opts.create_if_missing(true);
     // let mut db = TransactionDB::open_with_descriptor(&opts, &path, TransactionDBOptions::default()).unwrap();
 
-    // the 'default' cf doesn't being loaded with non-cf version of 'DB.open'
+    // the 'default' cf isn't loaded with non-cf version of 'DB.open'
     // let mut db = TransactionDB::open_default(&path).unwrap();
     let mut db = TransactionDB::open_cf_default(&opts, &path).unwrap();
 
